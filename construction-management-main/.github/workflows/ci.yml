@@ -1,0 +1,51 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Lint, test and Docker build (Node.js 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test -- --ci
+
+      - name: Build Docker image
+        run: docker build --tag construction-management-backend:${{ github.sha }} .
+
+      # Preparation only. Add a deploy job after a dedicated staging host is ready.
+      - name: Prepare staging deployment (validate only)
+        working-directory: ${{ github.workspace }}
+        env:
+          STAGING_ENV_FILE: ./backend/.env.staging.example
+          STAGING_IMAGE_TAG: ${{ github.sha }}
+        run: docker compose -f docker-compose.staging.yml config --quiet
